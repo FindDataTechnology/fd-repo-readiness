@@ -1,0 +1,98 @@
+name: guards
+
+# These guards check an OpenSpec repository's own hygiene. They are gated here because a
+# hygiene gate that silently passes is worse than none: the failure mode of every one of
+# them is "prints nothing, exits 0", which is indistinguishable from "checked and clean".
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  self-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: each guard self-tests on fixtures
+        # Every guard ships a --self-test that builds its own fixtures in a temp dir. That
+        # is the only way to prove the judgement works without depending on whichever
+        # changes happen to be in this repo today.
+        run: |
+          set -euo pipefail
+          for g in openspec-guards/check_*.py; do
+            echo "::group::$g"
+            python3 "$g" --self-test
+            echo "::endgroup::"
+          done
+
+      - name: guards refuse to judge a tree with no openspec/
+        # Exit 2 means "cannot judge". Any guard that returns 0 on an empty directory is
+        # reporting "clean" without having looked at anything.
+        run: |
+          set +e
+          for g in openspec-guards/check_*.py; do
+            python3 "$g" --root "$(mktemp -d)" >/dev/null 2>&1
+            rc=$?
+            if [ "$rc" -ne 2 ]; then
+              echo "$g exited $rc on an empty tree, expected 2"
+              exit 1
+            fi
+          done
+          echo "all guards exit 2 when there is nothing to judge: ok"
+
+      - name: guards pass on this repo's own openspec tree
+        # This repo has no openspec/ directory, so the guards would exit 2 above. Build a
+        # minimal valid tree instead: one archived change whose delta was merged, nothing
+        # orphaned, nothing unticked.
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"; cd "$root"
+          mkdir -p openspec/specs/demo openspec/changes/archive/2026-01-01-add-demo
+          printf '# demo Specification\n\n## Purpose\n\nDemo capability for the guard smoke test.\n\n## Requirements\n\n### Requirement: Demo exists\n\nThe system SHALL have a demo.\n\n#### Scenario: Demo runs\n- **WHEN** demo runs\n- **THEN** it exists\n' > openspec/specs/demo/spec.md
+          printf '## ADDED Requirements\n\n### Requirement: Demo exists\n\nThe system SHALL have a demo.\n\n#### Scenario: Demo runs\n- **WHEN** demo runs\n- **THEN** it exists\n' > openspec/changes/archive/2026-01-01-add-demo/specs/demo/spec.md
+          printf '## 1. Work\n\n- [x] 1.1 Done and ticked\n' > openspec/changes/archive/2026-01-01-add-demo/tasks.md
+          for g in "$GITHUB_WORKSPACE"/openspec-guards/check_*.py; do
+            echo "::group::$(basename "$g") on a clean tree"
+            python3 "$g" --root "$root"
+            echo "::endgroup::"
+          done
+
+      - name: a dirty tree is actually caught
+        # Green proves nothing on its own — each guard must also go red when the thing it
+        # looks for is present. One planted defect per guard.
+        run: |
+          set -euo pipefail
+          mk() { d="$(mktemp -d)"; mkdir -p "$d/openspec/specs/demo"; printf '# demo\n\n## Purpose\n\nx\n' > "$d/openspec/specs/demo/spec.md"; echo "$d"; }
+
+          # 1. duplicate: live change with an archived twin
+          r=$(mk); mkdir -p "$r/openspec/changes/dup" "$r/openspec/changes/archive/2026-01-01-dup"
+          printf -- '- [x] 1.1 a\n' > "$r/openspec/changes/dup/tasks.md"
+          printf -- '- [x] 1.1 a\n' > "$r/openspec/changes/archive/2026-01-01-dup/tasks.md"
+          if python3 openspec-guards/check_archive_active_duplicates.py --root "$r" --no-baseline; then
+            echo "duplicate guard passed a planted duplicate"; exit 1
+          fi
+
+          # 2. unticked task with no reason
+          r=$(mk); mkdir -p "$r/openspec/changes/archive/2026-01-02-u"
+          printf -- '- [ ] 1.1 never done, no excuse\n' > "$r/openspec/changes/archive/2026-01-02-u/tasks.md"
+          if python3 openspec-guards/check_archive_tasks.py --root "$r" --no-baseline; then
+            echo "tasks guard passed an unexplained unticked task"; exit 1
+          fi
+
+          # 3. orphan: archived delta declares a capability no live spec has
+          r=$(mk); mkdir -p "$r/openspec/changes/archive/2026-01-03-o/specs/ghost"
+          printf '## ADDED Requirements\n\n### Requirement: Ghost\n\nGhost SHALL exist.\n\n#### Scenario: s\n- **WHEN** x\n- **THEN** y\n' > "$r/openspec/changes/archive/2026-01-03-o/specs/ghost/spec.md"
+          if python3 openspec-guards/check_orphan_capabilities.py --root "$r" --no-baseline; then
+            echo "orphan guard passed a planted orphan"; exit 1
+          fi
+
+          echo "all three planted defects were caught: ok"
