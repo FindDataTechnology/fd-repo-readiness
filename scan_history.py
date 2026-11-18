@@ -193,8 +193,15 @@ def _run(cwd: Path, *args: str) -> None:
                    capture_output=True, text=True)
 
 
-def _make_dirty(root: Path, guard: Guard) -> Path:
-    """A real git repo: clean commit → topology commit → sensitive-file commit."""
+def _make_dirty(root: Path) -> Path:
+    """A real git repo: clean commits → topology commit → sensitive-file commit.
+
+    The filler commits are not decoration. `git log -p` walks newest-first, so with only
+    three commits the dirty one lands within the first 50 lines and a truncated stream
+    would still contain it — case C below then passes on one machine and fails on another
+    (it did: green locally, red in CI). Enough filler that the dirty commit is guaranteed
+    to fall outside any plausible cut makes the test deterministic.
+    """
     root.mkdir(parents=True, exist_ok=True)
     _run(root, "init", "-q", "-b", "main")
     _run(root, "config", "user.email", "self-test@example.com")
@@ -208,6 +215,11 @@ def _make_dirty(root: Path, guard: Guard) -> Path:
     (root / ".env").write_text("X=1\n")
     _run(root, "add", "-f", ".")
     _run(root, "commit", "-qm", "add env")
+    # 80 newer commits, each ~10 lines of diff, so the dirty commits sit well past line 50.
+    for i in range(80):
+        (root / f"note{i}.md").write_text("\n".join(f"line {j}" for j in range(8)) + "\n")
+        _run(root, "add", ".")
+        _run(root, "commit", "-qm", f"filler {i}")
     return root
 
 
@@ -223,7 +235,7 @@ def self_test() -> int:
     guard = Guard()
     tmp = Path(tempfile.mkdtemp(prefix="fd-history-selftest-"))
     try:
-        h = scan(_make_dirty(tmp / "dirty", guard), guard)
+        h = scan(_make_dirty(tmp / "dirty"), guard)
         if h["topology_lines"] >= 1:
             ok += 1
             print(f"  ok  A dirty repo: {h['topology_lines']} topology line(s) found")
