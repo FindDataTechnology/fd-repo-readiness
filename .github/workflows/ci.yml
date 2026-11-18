@@ -44,18 +44,23 @@ jobs:
         # Proves the two scanners agree on a known-dirty repo, through the real CLI
         # (the self-tests call scan() directly and could miss an argument-parsing bug).
         run: |
-          cd "$(mktemp -d)"
+          work="$(mktemp -d)" && cd "$work"
           git init -q -b main repo && cd repo
           git config user.email t@example.com && git config user.name t
           echo hi > README.md && git add . && git commit -qm init
           printf 'DSN = "postgres://u@10.11.12.13:5432/app"\n' > db.py
           git add . && git commit -qm dirty
-          S="$(dirname "$GITHUB_WORKSPACE")"
+          cd "$work"
           python3 "$GITHUB_WORKSPACE/scan_history.py" --root . --json > /tmp/h.json
+          python3 "$GITHUB_WORKSPACE/scan_worktree.py" --root . --json > /tmp/w.json
           python3 - <<'PY'
-          import json, sys
-          d = json.load(open("/tmp/h.json"))
-          topo = sum(r["topology_lines"] for r in d)
-          assert topo >= 1, f"history scan missed a private IP: {d}"
-          print(f"history scan found {topo} topology line(s): ok")
+          import json
+          hist = json.load(open("/tmp/h.json"))
+          work = json.load(open("/tmp/w.json"))
+          assert len(hist) == 1 and len(work) == 1, f"expected exactly one repo each: {hist} {work}"
+          topo_h = sum(r["topology_lines"] for r in hist)
+          topo_w = sum(len(r["files"]["private_ip"]) for r in work)
+          assert topo_h >= 1, f"history scan missed a private IP: {hist}"
+          assert topo_w >= 1, f"worktree scan missed a private IP: {work}"
+          print(f"both scanners found the private IP (history={topo_h}, worktree={topo_w}): ok")
           PY
