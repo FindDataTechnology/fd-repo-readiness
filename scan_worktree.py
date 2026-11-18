@@ -76,9 +76,13 @@ CALL_AFTER = re.compile(
 )
 
 SKIP_EXT = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".woff", ".woff2", ".ttf",
-            ".pdf", ".zip", ".gz", ".jar", ".so", ".dylib", ".wasm", ".pyc", ".lock"}
-SKIP_NAMES = {"package-lock.json", "pnpm-lock.yaml", "yarn.lock", "poetry.lock",
-              "uv.lock", "Cargo.lock", "go.sum"}
+            ".pdf", ".zip", ".gz", ".jar", ".so", ".dylib", ".wasm", ".pyc"}
+#: Lockfiles are skipped for **secret** detection only — their hashes look like tokens and
+#: produce nothing but noise. They are still scanned for topology: a private registry URL
+#: in `uv.lock` or `package-lock.json` is a real finding, and skipping the file outright
+#: would hide it. (Measured: a lockfile was one of the files flagged in a real audit.)
+LOCKFILE_NAMES = {"package-lock.json", "pnpm-lock.yaml", "yarn.lock", "poetry.lock",
+                  "uv.lock", "Cargo.lock", "go.sum", "Pipfile.lock", "composer.lock"}
 
 
 class Guard:
@@ -95,10 +99,6 @@ class Guard:
     def load(cls, path: str | None) -> "Guard":
         return cls(json.loads(Path(path).read_text(encoding="utf-8"))) if path else cls()
 
-    def hosts_hit(self, text: str) -> bool:
-        return bool((self.known_hosts and self.known_hosts.search(text))
-                    or (self.internal_names and self.internal_names.search(text)))
-
 
 def _tracked(repo: Path) -> list[str]:
     r = subprocess.run(["git", "-C", str(repo), "ls-files"],
@@ -110,21 +110,27 @@ def scan(repo: Path, guard: Guard) -> dict:
     hits = {"private_ip": [], "known_host": [], "internal_name": [], "secret": []}
     for rel in _tracked(repo):
         p = repo / rel
-        if not p.is_file() or p.suffix.lower() in SKIP_EXT or p.name in SKIP_NAMES:
+        if not p.is_file() or p.suffix.lower() in SKIP_EXT:
             continue
         try:
             text = p.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
+        is_lockfile = p.name in LOCKFILE_NAMES
 
         if PRIVATE_IP.search(text):
             hits["private_ip"].append(rel)
-        if guard.hosts_hit(text):
-            # Split the two site-specific categories so the report says which one fired.
-            (hits["known_host"] if guard.known_hosts and guard.known_hosts.search(text)
-             else hits["internal_name"]).append(rel)
+        # Both site-specific categories are checked independently: one file can contain a
+        # known public IP *and* an internal node name, and collapsing them into whichever
+        # matched first hides one of the two findings from the report.
+        if guard.known_hosts and guard.known_hosts.search(text):
+            hits["known_host"].append(rel)
+        if guard.internal_names and guard.internal_names.search(text):
+            hits["internal_name"].append(rel)
 
         for m in SECRET.finditer(text):
+            if is_lockfile:
+                break
             val = m.group("val")
             if (PLACEHOLDER.match(val) or ENV_NAME_LIKE.match(val) or DEV_CREDS.match(val)
                     or ACCESSOR_LIKE.match(val) or VALIDATOR_LIKE.match(val)):
@@ -195,7 +201,7 @@ def self_test() -> int:
             "schema.ts": "apiKey: context.apiKey,\nsecret: s.string(),\n",
             "k8s.yaml": "existingSecret: app-secrets\n",
             ".env.example": "X_API_TOKEN=sk-your-api-key\n",
-            "lock.json": 'api_key: "Ab3dEf6hIj9k"\n',
+            "uv.lock": 'api_key: "Ab3dEf6hIj9k"\n',
         }, tmp / "clean")
         hc = scan(clean, guard)
         expect("env read not counted as a secret", "app.py" not in hc["secret"])
@@ -203,7 +209,7 @@ def self_test() -> int:
         expect("property access / validator name not counted", "schema.ts" not in hc["secret"])
         expect("secret reference not counted", "k8s.yaml" not in hc["secret"])
         expect(".env.example not counted", ".env.example" not in hc["secret"])
-        expect("lockfiles skipped", "lock.json" not in hc["secret"])
+        expect("lockfile hashes not counted as secrets", "uv.lock" not in hc["secret"])
 
         noguard = scan(_repo_with({"x.txt": "host: 203.0.113.9\n"}, tmp / "noguard"), Guard())
         expect("without config, site-specific patterns stay silent",
