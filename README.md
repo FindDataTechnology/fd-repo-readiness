@@ -122,9 +122,22 @@ local hash answers "has this file changed here without re-stamping?". Checking o
 first means a hand-edit survives until the next regeneration, which reverts it with no
 warning.
 
-**CI runs this on a schedule, not on push.** Checking out the private source needs access
-this repo does not have; a push-time check would report "cannot judge" on every commit.
-A gate that is permanently unable to judge is worse than no gate — it teaches people to
-ignore red.
+**The drift check does not run in CI, deliberately.** It needs a local checkout of the
+private source repo, which this repo has no access to. A workflow that attempted it would
+report "cannot judge" on every run — and a gate that is permanently unable to judge teaches
+people to ignore red, which is worse than no gate. What *does* run in CI is
+`check_upstream.py --self-test`, which builds synthetic repos and proves both drift
+directions still work.
+
+Run the real check wherever the source is checked out:
+
+```
+python3 check_upstream.py --source ../fd-infra-deploy
+```
+
+This is a judgement call worth stating plainly: an ungated check relies on someone
+remembering, so it will eventually not run. That is accepted here because the alternative
+— storing a token with read access to the private repo in a public repo — re-creates the
+exact exposure these tools exist to find.
 
 Exit: `0` in sync · `1` drift · `2` cannot judge (source repo or manifest unavailable).

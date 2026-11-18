@@ -28,6 +28,12 @@ jobs:
       - name: scan_worktree self-test
         run: python3 scan_worktree.py --self-test
 
+      - name: check_upstream self-test
+        # The drift *check* cannot run here (it needs the private source checkout), but the
+        # checker itself must be tested wherever it can be. Its self-test builds synthetic
+        # repos, so both drift directions are provable without the source.
+        run: python3 check_upstream.py --self-test
+
       - name: both scripts run against an empty root and refuse to judge
         # A scanner that reports "all clean" when it found nothing to scan is the
         # failure mode this guards against: exit 2, not exit 0.
