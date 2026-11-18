@@ -182,7 +182,7 @@ def self_test() -> int:
             bad += 1
             print(f"  FAIL upstream change not caught: {code} {lines}")
 
-        code, _ = write_manifest(repo, src)
+        write_manifest(repo, src)
         code, lines = check(repo, src)
         if code == 0:
             ok += 1
