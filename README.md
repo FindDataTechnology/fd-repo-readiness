@@ -95,3 +95,36 @@ check ever stops failing, the tool reports a clean history that it never actuall
 ## Licence
 
 MIT. See `LICENSE`.
+
+## Adapted files and upstream drift
+
+`openspec-guards/` holds three guards **adapted** from a private workspace, not copied. The
+differences are permanent and deliberate: `--root` defaults to the cwd rather than to the
+source tree, internal history is removed, and waiver markers accept English as well as
+Chinese. So the files can never match upstream byte for byte, and drift is easy to miss.
+
+`upstream.json` records, per file, the upstream git blob SHA it was adapted from and the
+sha256 of the adaptation here. `check_upstream.py` reads both:
+
+```
+upstream moved  →  decide whether the change belongs here, then --write-manifest
+edited locally  →  someone bypassed adaptation; regeneration would silently revert it
+```
+
+```
+python3 check_upstream.py --self-test            # offline, synthetic repos
+python3 check_upstream.py --source ../fd-infra-deploy
+python3 check_upstream.py --source ../fd-infra-deploy --write-manifest
+```
+
+Two drift directions need two checks. The blob SHA answers "has upstream changed?"; the
+local hash answers "has this file changed here without re-stamping?". Checking only the
+first means a hand-edit survives until the next regeneration, which reverts it with no
+warning.
+
+**CI runs this on a schedule, not on push.** Checking out the private source needs access
+this repo does not have; a push-time check would report "cannot judge" on every commit.
+A gate that is permanently unable to judge is worse than no gate — it teaches people to
+ignore red.
+
+Exit: `0` in sync · `1` drift · `2` cannot judge (source repo or manifest unavailable).

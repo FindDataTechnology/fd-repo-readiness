@@ -1,0 +1,20 @@
+{
+  "source_repo": "fd-infra-deploy",
+  "source_path": "tools/",
+  "source_commit": "a152af55c0a8baa08b41f63123180fded877cf2a",
+  "_note": "blob_sha = the upstream file this copy was adapted from. adapted_sha256 = sha256 of the file in this repo, so an edit that does not come back through adaptation is caught.",
+  "files": {
+    "check_archive_active_duplicates.py": {
+      "blob_sha": "1a47b6bda0d2280375db05871c72c30d70834df1",
+      "adapted_sha256": "353d4d7570928cb9c15999c148508ee9e206110c7335f3530e1db2c9ed45deab"
+    },
+    "check_archive_tasks.py": {
+      "blob_sha": "179b5a269caa167b1e918acbd7a838d01cfea95c",
+      "adapted_sha256": "67e3e0b746af63613d51e541dfd2d51985ca4836495affb05b42e99a2ace96b6"
+    },
+    "check_orphan_capabilities.py": {
+      "blob_sha": "90c3581bef16accaa68dca427ca2583b5bb2b0a9",
+      "adapted_sha256": "7b632a665f60b01a3a0f1e7736068f2da70c69c3b9a6ae379656120520da3149"
+    }
+  }
+}
