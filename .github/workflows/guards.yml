@@ -56,8 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           root="$(mktemp -d)"; cd "$root"
-          mkdir -p openspec/specs/demo openspec/changes/archive/2026-01-01-add-demo
-          printf '# demo Specification\n\n## Purpose\n\nDemo capability for the guard smoke test.\n\n## Requirements\n\n### Requirement: Demo exists\n\nThe system SHALL have a demo.\n\n#### Scenario: Demo runs\n- **WHEN** demo runs\n- **THEN** it exists\n' > openspec/specs/demo/spec.md
+          mkdir -p openspec/specs/demo openspec/changes/archive/2026-01-01-add-demo/specs/demo          printf '# demo Specification\n\n## Purpose\n\nDemo capability for the guard smoke test.\n\n## Requirements\n\n### Requirement: Demo exists\n\nThe system SHALL have a demo.\n\n#### Scenario: Demo runs\n- **WHEN** demo runs\n- **THEN** it exists\n' > openspec/specs/demo/spec.md
           printf '## ADDED Requirements\n\n### Requirement: Demo exists\n\nThe system SHALL have a demo.\n\n#### Scenario: Demo runs\n- **WHEN** demo runs\n- **THEN** it exists\n' > openspec/changes/archive/2026-01-01-add-demo/specs/demo/spec.md
           printf '## 1. Work\n\n- [x] 1.1 Done and ticked\n' > openspec/changes/archive/2026-01-01-add-demo/tasks.md
           for g in "$GITHUB_WORKSPACE"/openspec-guards/check_*.py; do
