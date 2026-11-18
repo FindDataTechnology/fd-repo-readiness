@@ -1,0 +1,81 @@
+name: scan-public
+
+# Scans public repositories for content that should not be public. Needs no credentials:
+# the repos are already world-readable, so cloning them is the same act any stranger could
+# perform. That is deliberate — a scan needing a private-read PAT stored in a public repo
+# would be a worse exposure than the thing being measured.
+#
+# Private repos are out of scope here by construction. Scanning those requires a token with
+# read access to them, which belongs in a private repo's CI or nowhere.
+
+on:
+  workflow_dispatch:
+    inputs:
+      repos:
+        description: "space-separated owner/name list (blank = the default set below)"
+        required: false
+        type: string
+      history:
+        description: "also walk full history (slow: clones everything)"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: self-tests
+        run: |
+          python3 scan_worktree.py --self-test
+          python3 scan_history.py --self-test
+
+      - name: clone and scan
+        env:
+          REQUESTED: ${{ inputs.repos }}
+          DO_HISTORY: ${{ inputs.history }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/targets"; mkdir -p "$work"
+          default="FindDataTechnology/fd-industry-data FindDataTechnology/fd-official-web
+                   FindDataTechnology/open-connector-mt FindDataTechnology/fd-open-data-mcp
+                   FindDataTechnology/scraw-fd-open-data-mcp FindDataTechnology/fd-wanxing
+                   FindDataTechnology/fd-paper-trading FindDataTechnology/fd-daas-mcp
+                   FindDataTechnology/fd-memory FindDataTechnology/fd-cn-report
+                   FindDataTechnology/law-bench FindDataTechnology/fd-appliance"
+          list="${REQUESTED:-$default}"
+          for spec in $list; do
+            name="${spec##*/}"
+            echo "::group::clone $spec"
+            if [ "$DO_HISTORY" = "true" ]; then
+              git clone --quiet "https://github.com/$spec.git" "$work/$name"
+            else
+              git clone --quiet --depth 1 "https://github.com/$spec.git" "$work/$name"
+            fi
+            echo "::endgroup::"
+          done
+          echo "--- worktree ---"
+          python3 scan_worktree.py --root "$work" --json > worktree.json
+          python3 scan_worktree.py --root "$work"
+          if [ "$DO_HISTORY" = "true" ]; then
+            echo "--- history ---"
+            python3 scan_history.py --root "$work" --json > history.json
+            python3 scan_history.py --root "$work"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scan-results
+          path: |
+            worktree.json
+            history.json
+          if-no-files-found: warn
