@@ -1,16 +1,24 @@
 # fd-repo-readiness
 
-Two read-only scanners that answer one question before a private repository is published:
-
-> **What is in this repo that should not leave the building?**
+Tools that answer questions about a repository nobody wants to answer from memory.
 
 ```
 scan_worktree.py   the files as they are committed now  — a hit here can be FIXED
 scan_history.py    every line that was ever committed   — a hit here CANNOT be fixed
 ```
 
+The scanners answer one question before a private repository is published:
+
+> **What is in this repo that should not leave the building?**
+
 They report separately because the two answers require different actions. A clean worktree
 with a dirty history is the common case, and reporting one combined number hides it.
+
+`openspec-guards/` holds three checks for [OpenSpec](https://github.com/openspec) hygiene —
+archived/live change duplicates, unexplained unticked tasks, and capabilities that only
+exist inside an archived delta. Each is a defect that validates green and is invisible to
+every other check. See [Adapted files and upstream drift](#adapted-files-and-upstream-drift).
+
 
 ## Why both
 
