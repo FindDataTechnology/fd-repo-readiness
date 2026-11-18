@@ -1,0 +1,16 @@
+{
+  "_comment": "Copy to guard.json and fill in your own values. Never commit guard.json.",
+
+  "_known_hosts": "Exact public IPs that identify your infrastructure. Matched as substrings.",
+  "known_hosts": [
+    "203.0.113.9",
+    "198.51.100.14"
+  ],
+
+  "_internal_name_patterns": "Regexes for hostnames, node names, internal registries. JSON-escaped.",
+  "internal_name_patterns": [
+    "\\bnode-[a-z0-9]+\\b",
+    "[\\w-]+\\.internal\\.example\\.com",
+    "registry\\.internal"
+  ]
+}

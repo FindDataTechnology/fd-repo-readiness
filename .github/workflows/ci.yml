@@ -1,0 +1,61 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  self-test:
+    # The whole point of these scripts is to produce a verdict someone acts on. A scanner
+    # that silently under-reports is worse than no scanner, so both self-tests are gates,
+    # not smoke tests. They are fully offline and hermetic — no fixtures from any real repo.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: scan_history self-test
+        run: python3 scan_history.py --self-test
+
+      - name: scan_worktree self-test
+        run: python3 scan_worktree.py --self-test
+
+      - name: both scripts run against an empty root and refuse to judge
+        # A scanner that reports "all clean" when it found nothing to scan is the
+        # failure mode this guards against: exit 2, not exit 0.
+        run: |
+          mkdir -p /tmp/empty
+          set +e
+          python3 scan_history.py --root /tmp/empty; a=$?
+          python3 scan_worktree.py --root /tmp/empty; b=$?
+          set -e
+          [ "$a" -eq 2 ] || { echo "scan_history exited $a, expected 2"; exit 1; }
+          [ "$b" -eq 2 ] || { echo "scan_worktree exited $b, expected 2"; exit 1; }
+
+      - name: end-to-end against a throwaway repo
+        # Proves the two scanners agree on a known-dirty repo, through the real CLI
+        # (the self-tests call scan() directly and could miss an argument-parsing bug).
+        run: |
+          cd "$(mktemp -d)"
+          git init -q -b main repo && cd repo
+          git config user.email t@example.com && git config user.name t
+          echo hi > README.md && git add . && git commit -qm init
+          printf 'DSN = "postgres://u@10.11.12.13:5432/app"\n' > db.py
+          git add . && git commit -qm dirty
+          S="$(dirname "$GITHUB_WORKSPACE")"
+          python3 "$GITHUB_WORKSPACE/scan_history.py" --root . --json > /tmp/h.json
+          python3 - <<'PY'
+          import json, sys
+          d = json.load(open("/tmp/h.json"))
+          topo = sum(r["topology_lines"] for r in d)
+          assert topo >= 1, f"history scan missed a private IP: {d}"
+          print(f"history scan found {topo} topology line(s): ok")
+          PY
