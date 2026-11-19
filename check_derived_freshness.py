@@ -61,8 +61,12 @@ def _gh(path: str) -> str | None:
     return r.stdout if r.returncode == 0 else None
 
 
-def _read_provenance(repo: str) -> tuple[str | None, str | None]:
-    """Return (base_commit, source_name) or (None, None) when there is no record."""
+def _read_provenance(repo: str) -> tuple[str | None, str | None, bool]:
+    """Return (base_commit, source_name, partial) or (None, None, False) with no record.
+
+    `partial` marks a derived repo that carries only a slice of its source. Its commit lag
+    is not a staleness signal — most of those commits cannot affect the exported slice.
+    """
     for path in PROVENANCE_PATHS:
         raw = _gh(f"repos/{repo}/contents/{path}")
         if not raw:
@@ -75,9 +79,10 @@ def _read_provenance(repo: str) -> tuple[str | None, str | None]:
             continue
         base = body.get("baseCommit") or body.get("sourceCommit")
         src = body.get("source") or body.get("sourceRepo")
+        partial = bool(body.get("scope"))
         if base:
-            return base, src
-    return None, None
+            return base, src, partial
+    return None, None, False
 
 
 def _is_ancestor(repo_dir: Path, ancestor: str, descendant: str = "HEAD") -> bool | None:
@@ -112,7 +117,7 @@ def check(source_root: Path) -> tuple[int, list[dict]]:
             results.append(row)
             continue
 
-        base, recorded_source = _read_provenance(public_repo)
+        base, recorded_source, partial = _read_provenance(public_repo)
         if not base:
             row.update(status="unrecorded",
                        detail="no provenance file — cannot tell what this was built from")
@@ -135,7 +140,10 @@ def check(source_root: Path) -> tuple[int, list[dict]]:
 
         behind = _behind_by(src_dir, base)
         row["behind"] = behind
-        if behind == 0:
+        if partial:
+            # 只取源仓一部分的派生仓：commit 落后数不是判据（见 _read_provenance）。
+            row.update(status="fresh", detail="partial derivation — lag is not a signal")
+        elif behind == 0:
             row.update(status="fresh")
         else:
             row.update(status="behind", detail=f"{behind} commit(s) since the snapshot")

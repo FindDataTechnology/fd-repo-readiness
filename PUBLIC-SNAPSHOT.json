@@ -2,5 +2,7 @@
   "source": "fd-infra-deploy",
   "sourceCommit": "a152af55c0a8baa08b41f63123180fded877cf2a",
   "note": "本仓的 openspec-guards/ 与 dup-image-tags.py 派生自 fd-infra-deploy/tools/，基线是这里记的 commit（不是 fd-infra-deploy 的 HEAD——本仓只取 tools/ 的一小部分，拿 HEAD 会比实际派生范围大得多）。逐文件的上游 blob sha 在 openspec-guards/upstream.json。",
-  "generatedAt": "2026-11-19T08:15:51Z"
+  "generatedAt": "2026-11-19T08:15:51Z",
+  "scope": "tools/ 的一个子集（3 个 openspec 闸 + dup-image-tags）。本仓不代表 fd-infra-deploy 的整体公开面。",
+  "freshnessRule": "与上游不同步是否算问题，取决于 tools/ 里被派生的那几个文件是否变过；整体 commit 落后数不是判据。"
 }
