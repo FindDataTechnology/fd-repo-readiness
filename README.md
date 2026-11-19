@@ -14,6 +14,13 @@ The scanners answer one question before a private repository is published:
 They report separately because the two answers require different actions. A clean worktree
 with a dirty history is the common case, and reporting one combined number hides it.
 
+`check_derived_freshness.py` answers one question about every derived public repo: **is it
+still what the private source says it is?** Three distinct failures, checked separately
+because they mean different things — the provenance record is missing, the record names a
+commit the tree does not match (it was rebuilt and the record was not updated), or the
+record is honest but the source has moved on. A stale public tree never errors, never turns
+red, and is only noticed by someone who happens to compare.
+
 `dup-image-tags.py` finds immutable tags that point at the same digest — a quota problem,
 not a storage one: registries that cap tags per repository (Tencent TCR personal edition
 caps at 100) reject every push once full, and the v2 delete API does not free the quota.

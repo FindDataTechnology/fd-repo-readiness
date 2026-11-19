@@ -28,6 +28,9 @@ jobs:
       - name: scan_worktree self-test
         run: python3 scan_worktree.py --self-test
 
+      - name: check_derived_freshness self-test
+        run: python3 check_derived_freshness.py --self-test
+
       - name: check_upstream self-test
         # The drift *check* cannot run here (it needs the private source checkout), but the
         # checker itself must be tested wherever it can be. Its self-test builds synthetic
