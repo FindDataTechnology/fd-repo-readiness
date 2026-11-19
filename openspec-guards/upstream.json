@@ -15,6 +15,11 @@
     "check_orphan_capabilities.py": {
       "blob_sha": "90c3581bef16accaa68dca427ca2583b5bb2b0a9",
       "adapted_sha256": "7b632a665f60b01a3a0f1e7736068f2da70c69c3b9a6ae379656120520da3149"
+    },
+    "dup-image-tags.py": {
+      "blob_sha": "7a040adcddfd2a110c300690e20ace3701cf34c0",
+      "adapted_sha256": "9d88979ae1b040412f6bacfa2763ce284d30c7fa315d91792a6149fe515e9848",
+      "adapted_dir": "."
     }
   }
 }

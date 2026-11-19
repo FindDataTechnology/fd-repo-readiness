@@ -83,7 +83,7 @@ def check(root: Path, source: Path) -> tuple[int, list[str]]:
     drift = 0
 
     for name, rec in sorted(man.get("files", {}).items()):
-        local = root / GUARDS_DIR / name
+        local = root / rec.get("adapted_dir", GUARDS_DIR) / name
         if not local.exists():
             lines.append(f"DRIFT {name}: listed in the manifest but missing here")
             drift += 1
@@ -124,7 +124,7 @@ def write_manifest(root: Path, source: Path) -> int:
         capture_output=True, text=True).stdout.strip()
     for name, rec in man.get("files", {}).items():
         rec["blob_sha"] = _blob_sha(source, f"{src_rel}{name}") or rec.get("blob_sha")
-        local = root / GUARDS_DIR / name
+        local = root / rec.get("adapted_dir", GUARDS_DIR) / name
         if local.exists():
             rec["adapted_sha256"] = _sha256(local)
     mpath.write_text(json.dumps(man, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

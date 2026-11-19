@@ -14,6 +14,12 @@ The scanners answer one question before a private repository is published:
 They report separately because the two answers require different actions. A clean worktree
 with a dirty history is the common case, and reporting one combined number hides it.
 
+`dup-image-tags.py` finds immutable tags that point at the same digest — a quota problem,
+not a storage one: registries that cap tags per repository (Tencent TCR personal edition
+caps at 100) reject every push once full, and the v2 delete API does not free the quota.
+The tool only lists what to delete; deleting is a console operation. It is read-only on
+purpose — a delete that does not free quota leaves a false record of having cleaned up.
+
 `openspec-guards/` holds three checks for [OpenSpec](https://github.com/openspec) hygiene —
 archived/live change duplicates, unexplained unticked tasks, and capabilities that only
 exist inside an archived delta. Each is a defect that validates green and is invisible to
